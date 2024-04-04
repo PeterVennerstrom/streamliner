@@ -8,6 +8,13 @@ from .registry import register as REGISTER
 from .registry import streamliner_registry
 
 
+def load_or_pass_config(config):
+    if isinstance(config, str):
+        with open(config, "r") as file:
+            config = json.load(file)
+    return config
+
+
 def build_object_by_name(object_name, *args, **kwargs):
     obj = streamliner_registry.get(object_name)
     if obj is not None:
@@ -48,12 +55,7 @@ def import_to_register(config):
 @REGISTER
 class LocalBuilder:
     def __init__(self, config, device=0):
-        if isinstance(config, str):
-            with open(config, "r") as file:
-                self.config = json.load(file)
-        else:
-            self.config = config
-
+        self.config = load_or_pass_config(config)
         self.device = device
 
     def build(self, model_name):
@@ -86,7 +88,9 @@ class RemoteBuilder(LocalBuilder, ABC):
 
     @abstractmethod
     def _acquire_files(self, model_name, files):
-        # Logic to download files from remote source
+        """Logic to download files from remote source and situate them in the same folder
+        structure as expected by the LocalBuilder
+        """
         pass
 
     def build(self, model_name):

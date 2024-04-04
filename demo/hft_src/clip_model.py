@@ -9,7 +9,7 @@ torch.set_num_threads(1)
 
 @REGISTER
 class CLIPClassifier:
-    def __init__(self, texts, arch, pretrain_source, device=0):
+    def __init__(self, texts, arch, pretrain_source, device=0, **kwargs):
         self.device = device
         self.model, _, self.preprocess = open_clip.create_model_and_transforms(
             arch, pretrain_source, device=f"cuda:{device}"

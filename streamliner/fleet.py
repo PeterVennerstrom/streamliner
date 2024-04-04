@@ -1,12 +1,12 @@
-import json
 from multiprocessing import Array, Lock, Manager, Pipe, Process, Value
 
 from .model_builder import (
     LocalBuilder,
     RemoteBuilder,
     build_object_by_name,
-    streamliner_registry,
+    load_or_pass_config,
 )
+from .registry import streamliner_registry
 
 
 class SingleDeviceFleet:
@@ -139,6 +139,7 @@ class DeviceLoadBalancer:
             self.device_availability[self.device_indices.index(device)] = True
 
     def _ensure_model_ready(self, model_name):
+
         if model_name not in self.model_build_tracker:
             self.model_build_tracker[model_name] = False
         else:
@@ -146,7 +147,7 @@ class DeviceLoadBalancer:
                 pass
 
     def __call__(self, call_dict):
-        if self.model_build_tracker:
+        if self.model_build_tracker is not None:
             model_name = call_dict["model_name"]
             self._ensure_model_ready(model_name)
 
@@ -156,7 +157,7 @@ class DeviceLoadBalancer:
             self.main_pipes[device].send(call_dict)
             self.task_completion_events[device].wait()
             results = self.main_pipes[device].recv()
-            if self.model_build_tracker:
+            if self.model_build_tracker is not None:
                 self.model_build_tracker[model_name] = True
         finally:
             self.task_completion_events[device].clear()
@@ -170,6 +171,7 @@ class MultiDeviceFleet:
     def __init__(self, device_indices, model_builder_config):
         self.device_indices = device_indices
         self.model_builder_config = model_builder_config
+        self.config = load_or_pass_config(model_builder_config["init_params"]["config"])
         self.per_device_workers = []
         self.main_pipes = []
         self.task_completion_events = []
@@ -178,7 +180,7 @@ class MultiDeviceFleet:
             self.process_manager.Lock() for _ in self.device_indices
         ]
         self.initialize_per_device_workers()
-        remote_builder = isinstance(
+        remote_builder = issubclass(
             streamliner_registry.get(model_builder_config["class"]), RemoteBuilder
         )
         self.model_build_tracker = (
@@ -248,9 +250,5 @@ class MultiDeviceFleet:
 
     @property
     def model_proxy(self):
-        model_config_path = self.model_builder_config["init_params"]["path_to_cfg"]
-        with open(model_config_path, "r") as file:
-            model_config = json.load(file)
-
-        proxy = ModelProxy(model_config, self.fleet_callable)
+        proxy = ModelProxy(self.config["models"], self.fleet_callable)
         return proxy
