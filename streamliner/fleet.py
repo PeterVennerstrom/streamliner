@@ -1,7 +1,12 @@
 import json
 from multiprocessing import Array, Lock, Manager, Pipe, Process, Value
 
-from .model_builder import LocalBuilder, build_object_by_name
+from .model_builder import (
+    LocalBuilder,
+    RemoteBuilder,
+    build_object_by_name,
+    streamliner_registry,
+)
 
 
 class SingleDeviceFleet:
@@ -94,12 +99,18 @@ class ModelMethodProxy:
 
 class DeviceLoadBalancer:
     def __init__(
-        self, main_pipes, task_completion_events, device_access_locks, device_indices
+        self,
+        main_pipes,
+        task_completion_events,
+        device_access_locks,
+        device_indices,
+        model_build_tracker,
     ):
         self.main_pipes = main_pipes
         self.task_completion_events = task_completion_events
         self.device_access_locks = device_access_locks
         self.device_indices = device_indices
+        self.model_build_tracker = model_build_tracker
 
         self.round_robin_index = Value("i", 0)
         self.round_robin_lock = Lock()
@@ -127,13 +138,26 @@ class DeviceLoadBalancer:
         with self.availability_lock:
             self.device_availability[self.device_indices.index(device)] = True
 
+    def _ensure_model_ready(self, model_name):
+        if model_name not in self.model_build_tracker:
+            self.model_build_tracker[model_name] = False
+        else:
+            while not self.model_build_tracker[model_name]:
+                pass
+
     def __call__(self, call_dict):
+        if self.model_build_tracker:
+            model_name = call_dict["model_name"]
+            self._ensure_model_ready(model_name)
+
         device = self._select_device()
         self.device_access_locks[device].acquire()
         try:
             self.main_pipes[device].send(call_dict)
             self.task_completion_events[device].wait()
             results = self.main_pipes[device].recv()
+            if self.model_build_tracker:
+                self.model_build_tracker[model_name] = True
         finally:
             self.task_completion_events[device].clear()
             self.device_access_locks[device].release()
@@ -154,6 +178,12 @@ class MultiDeviceFleet:
             self.process_manager.Lock() for _ in self.device_indices
         ]
         self.initialize_per_device_workers()
+        remote_builder = isinstance(
+            streamliner_registry.get(model_builder_config["class"]), RemoteBuilder
+        )
+        self.model_build_tracker = (
+            self.process_manager.dict() if remote_builder else None
+        )
 
     def initialize_per_device_workers(self):
         for device_id in self.device_indices:
@@ -212,6 +242,7 @@ class MultiDeviceFleet:
             self.task_completion_events,
             self.device_access_locks,
             self.device_indices,
+            self.model_build_tracker,
         )
         return device_load_balancer
 

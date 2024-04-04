@@ -1,6 +1,8 @@
 import importlib
 import json
 import sys
+from abc import ABC, abstractmethod
+from pathlib import Path
 
 from .registry import register as REGISTER
 from .registry import streamliner_registry
@@ -45,25 +47,58 @@ def import_to_register(config):
 
 @REGISTER
 class LocalBuilder:
-    def __init__(self, path_to_cfg, device=0):
-        self.path_to_cfg = path_to_cfg
-        self.device = device
-        self.models = {}
+    def __init__(self, config, device=0):
+        if isinstance(config, str):
+            with open(config, "r") as file:
+                self.config = json.load(file)
+        else:
+            self.config = config
 
-        with open(path_to_cfg, "r") as file:
-            self.models = json.load(file)
+        self.device = device
 
     def build(self, model_name):
-        if model_name not in self.models:
+        if model_name not in self.config["models"]:
             raise ValueError(f"Model '{model_name}' not found in configurations.")
 
-        model_cfg = self.models[model_name]
+        model_cfg = self.config["models"][model_name]
         import_to_register(model_cfg)
         model_class_name = model_cfg["model_class"]
         init_params = model_cfg.get("init_params", {})
-
         init_params["device"] = self.device
 
-        model = build_object_by_name(model_class_name, **init_params)
+        init_files = model_cfg.get("init_files", {})
+        full_init_files = self.join_paths(model_name, init_files)
+        init_params = {**full_init_files, **init_params}
 
-        return model
+        return build_object_by_name(model_class_name, **init_params)
+
+    def join_paths(self, model_name, init_files):
+        full_paths = {}
+        for key, file_name in init_files.items():
+            full_path = Path(self.config["model_dir"]) / model_name / file_name
+            if not full_path.exists():
+                raise FileNotFoundError(f"Required file not found: {full_path}")
+            full_paths[key] = str(full_path)
+        return full_paths
+
+
+class RemoteBuilder(LocalBuilder, ABC):
+
+    @abstractmethod
+    def _acquire_files(self, model_name, files):
+        # Logic to download files from remote source
+        pass
+
+    def build(self, model_name):
+        model_cfg = self.config["models"][model_name]
+        init_files = model_cfg.get("init_files", {})
+
+        files_to_acquire = {
+            key: val
+            for key, val in init_files.items()
+            if not (Path(self.config["model_dir"]) / model_name / val).exists()
+        }
+
+        self._acquire_files(model_name, files_to_acquire)
+
+        return super().build(model_name)
