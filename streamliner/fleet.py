@@ -27,10 +27,10 @@ class SingleDeviceFleet:
         model = self.loaded_models[model_name]
 
         def model_accessor(*args, **kwargs):
-            if not args and not kwargs:
-                return model
-            else:
+            if args or kwargs:
                 return model(*args, **kwargs)
+
+            return model
 
         return model_accessor
 
@@ -46,14 +46,14 @@ class ModelProxy:
         self.fleet_callable = fleet_callable
 
     def __getattr__(self, model_name):
-        if model_name in self.model_config:
-            return ModelMethodProxy(
-                self.fleet_callable, model_name, None, self.model_config[model_name]
-            )
-        else:
+        if model_name not in self.model_config:
             raise AttributeError(
                 f"Model '{model_name}' not found in model configuration."
             )
+
+        return ModelMethodProxy(
+            self.fleet_callable, model_name, None, self.model_config[model_name]
+        )
 
     def __getitem__(self, model_name):
         return self.__getattr__(model_name)
@@ -85,16 +85,15 @@ class ModelMethodProxy:
 
     def __getattr__(self, method_name):
         if (
-            "proxy_methods" in self.model_details
-            and method_name in self.model_details["proxy_methods"]
+            "proxy_methods" not in self.model_details
+            or method_name not in self.model_details["proxy_methods"]
         ):
-            return ModelMethodProxy(
-                self.fleet_callable, self.model_name, method_name, self.model_details
-            )
-        else:
             raise AttributeError(
                 f"Method '{method_name}' not configured for proxy on model '{self.model_name}'."
             )
+        return ModelMethodProxy(
+            self.fleet_callable, self.model_name, method_name, self.model_details
+        )
 
 
 class DeviceLoadBalancer:
@@ -170,7 +169,6 @@ class DeviceLoadBalancer:
 class MultiDeviceFleet:
     def __init__(self, device_indices, model_builder_config):
         self.device_indices = device_indices
-        self.model_builder_config = model_builder_config
         self.config = load_or_pass_config(model_builder_config["init_params"]["config"])
         self.per_device_workers = []
         self.main_pipes = []
@@ -179,7 +177,7 @@ class MultiDeviceFleet:
         self.device_access_locks = [
             self.process_manager.Lock() for _ in self.device_indices
         ]
-        self.initialize_per_device_workers()
+        self.initialize_per_device_workers(model_builder_config)
         remote_builder = issubclass(
             streamliner_registry.get(model_builder_config["class"]), RemoteBuilder
         )
@@ -187,13 +185,13 @@ class MultiDeviceFleet:
             self.process_manager.dict() if remote_builder else None
         )
 
-    def initialize_per_device_workers(self):
+    def initialize_per_device_workers(self, model_builder_config):
         for device_id in self.device_indices:
             main_conn, worker_conn = Pipe()
             event = self.process_manager.Event()
             worker = Process(
                 target=self.per_device_worker_routine,
-                args=(device_id, worker_conn, event, self.model_builder_config),
+                args=(device_id, worker_conn, event, model_builder_config),
             )
             worker.start()
             self.per_device_workers.append(worker)
