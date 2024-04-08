@@ -1,40 +1,45 @@
 {
-    "due_diligence": {
-        "model_class": "CLIPClassifier",
-        "custom_import": "hft_src.clip_model",
-        "proxy_methods": [],
-        "init_params": {
-            "texts": [
-                [
-                    "a financial statement made by someone who understands a collateral debt chain is only as strong as the weakest counterparty",
-                    "a financial statement of a company that is not a going concern"
+    "model_dir": "./models/",
+    "models": {
+        "due_diligence": {
+            "model_class": "CLIPClassifier",
+            "custom_import": "hft_src.clip_model",
+            "proxy_methods": [],
+            "init_files": {},
+            "init_params": {
+                "texts": [
+                    [
+                        "a financial statement made by someone who understands a collateral debt chain is only as strong as the weakest counterparty",
+                        "a financial statement of a company that is not a going concern"
+                    ],
+                    [
+                        "a professional looking financial statement prepared by an expert",
+                        "a suspect looking financial statement that looks like a child made it"
+                    ]
                 ],
-                [
-                    "a professional looking finacial statement prepared by an expert",
-                    "a suspect looking financial statement that looks like a child made it"
-                ]
-            ],
-            "arch": "RN50",
-            "pretrain_source": "openai"
-        }
-    },
-    "due_diligence_extra": {
-        "model_class": "CLIPClassifier",
-        "custom_import": "hft_src.clip_model",
-        "proxy_methods": [],
-        "init_params": {
-            "texts": [
-                [
-                    "a financial statement made by someone who understands a collateral debt chain is only as strong as the weakest counterparty",
-                    "a financial statement of a company that is not a going concern"
+                "arch": "RN50",
+                "pretrain_source": "openai"
+            }
+        },
+        "due_diligence_extra": {
+            "model_class": "CLIPClassifier",
+            "custom_import": "hft_src.clip_model",
+            "proxy_methods": [],
+            "init_files": {},
+            "init_params": {
+                "texts": [
+                    [
+                        "a financial statement made by someone who understands a collateral debt chain is only as strong as the weakest counterparty",
+                        "a financial statement of a company that is not a going concern"
+                    ],
+                    [
+                        "a professional looking financial statement prepared by an expert",
+                        "a suspect looking financial statement that looks like a child made it"
+                    ]
                 ],
-                [
-                    "a professional looking finacial statement prepared by an expert",
-                    "a suspect looking financial statement that looks like a child made it"
-                ]
-            ],
-            "arch": "ViT-B-32",
-            "pretrain_source": "laion2b_s34b_b79k"
+                "arch": "ViT-B-32",
+                "pretrain_source": "laion2b_s34b_b79k"
+            }
         }
     }
 }

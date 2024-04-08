@@ -30,7 +30,7 @@ if __name__ == "__main__":
     mp.set_start_method("spawn")
     model_builder_cfg = {
         "class": "LocalBuilder",
-        "init_params": {"path_to_cfg": "model_cfg.json"},
+        "init_params": {"config": "model_cfg.json"},
     }
 
     device_indices = [0, 1]

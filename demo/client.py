@@ -8,7 +8,7 @@ from streamliner.fleet import ModelProxy
 
 paths = glob.glob("./financial_statements/*.jpg")
 with open("model_cfg.json", "r") as file:
-    model_config = json.load(file)
+    model_config = json.load(file)["models"]
 
 
 def fleet_callable(call_dict):
